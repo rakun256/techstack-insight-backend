@@ -3,22 +3,22 @@ spring:
     name: techstack-insight-backend
 
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/techstack_insight}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
-    jpa:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
       hibernate:
-        ddl-auto: update   # geliştirme için
-      show-sql: true
-      properties:
-        hibernate:
-          format_sql: true
+        format_sql: true
 
-    sql:
-      init:
-        mode: always
+  sql:
+    init:
+      mode: never
 
 server:
   port: 8080
