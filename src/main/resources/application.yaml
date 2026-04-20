@@ -27,3 +27,6 @@ integration:
   greenhouse:
     base-url: ${GREENHOUSE_BASE_URL:https://boards-api.greenhouse.io}
     jobs-path: ${GREENHOUSE_JOBS_PATH:/v1/boards/{boardToken}/jobs}
+  lever:
+    base-url: ${LEVER_BASE_URL:https://api.lever.co}
+    postings-path: ${LEVER_POSTINGS_PATH:/v0/postings/{companyToken}}
