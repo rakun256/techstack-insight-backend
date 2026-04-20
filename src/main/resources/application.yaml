@@ -22,3 +22,8 @@ spring:
 
 server:
   port: 8080
+
+integration:
+  greenhouse:
+    base-url: ${GREENHOUSE_BASE_URL:https://boards-api.greenhouse.io}
+    jobs-path: ${GREENHOUSE_JOBS_PATH:/v1/boards/{boardToken}/jobs}
