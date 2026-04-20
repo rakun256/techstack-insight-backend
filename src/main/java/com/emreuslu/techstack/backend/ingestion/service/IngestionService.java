@@ -2,10 +2,16 @@ package com.emreuslu.techstack.backend.ingestion.service;
 
 import com.emreuslu.techstack.backend.company.entity.Company;
 import com.emreuslu.techstack.backend.company.repository.CompanyRepository;
+import com.emreuslu.techstack.backend.extraction.dto.ExtractedSkillDto;
+import com.emreuslu.techstack.backend.extraction.service.SkillExtractionService;
 import com.emreuslu.techstack.backend.ingestion.dto.NormalizedJobDto;
 import com.emreuslu.techstack.backend.job.entity.Job;
 import com.emreuslu.techstack.backend.job.repository.JobRepository;
+import com.emreuslu.techstack.backend.jobskill.service.JobSkillService;
+import com.emreuslu.techstack.backend.skill.entity.Skill;
+import com.emreuslu.techstack.backend.skill.service.SkillService;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,6 +23,9 @@ public class IngestionService {
 
     private final CompanyRepository companyRepository;
     private final JobRepository jobRepository;
+    private final SkillExtractionService skillExtractionService;
+    private final SkillService skillService;
+    private final JobSkillService jobSkillService;
 
     @Transactional
     public void ingestAll(Collection<NormalizedJobDto> jobs) {
@@ -49,15 +58,25 @@ public class IngestionService {
                 .source(source)
                 .title(cleanRequired(dto.title(), "title"))
                 .location(cleanRequired(dto.location(), "location"))
-                .description(cleanRequired(dto.description(), "description"))
+                .description(cleanOptional(dto.description()) != null ? cleanOptional(dto.description()) : "")
                 .applyUrl(cleanRequired(dto.applyUrl(), "applyUrl"))
                 .postedAt(Objects.requireNonNull(dto.postedAt(), "postedAt must not be null"))
                 .company(company)
                 .build();
 
-        jobRepository.save(job);
+        Job savedJob = jobRepository.save(job);
 
-        // TODO: Plug extraction pipeline here to detect skills and persist JobSkill links.
+        List<ExtractedSkillDto> extractedSkills = skillExtractionService.extractSkills(dto.description());
+        if (extractedSkills.isEmpty()) {
+            return;
+        }
+
+        List<Skill> skills = extractedSkills.stream()
+                .map(ExtractedSkillDto::name)
+                .map(skillService::findOrCreateByName)
+                .toList();
+
+        jobSkillService.linkSkillsToJob(savedJob, skills);
     }
 
     private Company resolveCompany(NormalizedJobDto dto, String source) {
@@ -95,7 +114,6 @@ public class IngestionService {
         cleanRequired(dto.companyName(), "companyName");
         cleanRequired(dto.title(), "title");
         cleanRequired(dto.location(), "location");
-        cleanRequired(dto.description(), "description");
         cleanRequired(dto.applyUrl(), "applyUrl");
         Objects.requireNonNull(dto.postedAt(), "postedAt must not be null");
     }
