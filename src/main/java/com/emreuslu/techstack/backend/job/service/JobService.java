@@ -28,7 +28,15 @@ public class JobService {
                 .externalId(request.externalId())
                 .source(request.source())
                 .title(request.title())
+                .normalizedTitle(request.title())
+                .softwareRelevant(false)
+                .roleFamily(null)
+                .roleSubfamily(null)
                 .location(request.location())
+                .locationNormalized(request.location())
+                .country(null)
+                .remote(false)
+                .hybrid(false)
                 .description(request.description())
                 .applyUrl(request.applyUrl())
                 .postedAt(request.postedAt())
@@ -60,7 +68,15 @@ public class JobService {
                 job.getExternalId(),
                 job.getSource(),
                 job.getTitle(),
+                job.getNormalizedTitle(),
+                job.isSoftwareRelevant(),
+                job.getRoleFamily(),
+                job.getRoleSubfamily(),
                 job.getLocation(),
+                job.getLocationNormalized(),
+                job.getCountry(),
+                job.isRemote(),
+                job.isHybrid(),
                 job.getDescription(),
                 job.getApplyUrl(),
                 job.getPostedAt(),

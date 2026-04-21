@@ -47,8 +47,32 @@ public class Job {
     @Column(nullable = false)
     private String title;
 
+    @Column(name = "normalized_title")
+    private String normalizedTitle;
+
+    @Column(name = "software_relevant", nullable = false)
+    private boolean softwareRelevant;
+
+    @Column(name = "role_family")
+    private String roleFamily;
+
+    @Column(name = "role_subfamily")
+    private String roleSubfamily;
+
     @Column(nullable = false)
     private String location;
+
+    @Column(name = "location_normalized")
+    private String locationNormalized;
+
+    @Column
+    private String country;
+
+    @Column(name = "is_remote", nullable = false)
+    private boolean remote;
+
+    @Column(name = "is_hybrid", nullable = false)
+    private boolean hybrid;
 
     @Lob
     @Column(nullable = false)
