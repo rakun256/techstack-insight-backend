@@ -2,6 +2,7 @@ package com.emreuslu.techstack.backend.ingestion.service;
 
 import com.emreuslu.techstack.backend.company.entity.Company;
 import com.emreuslu.techstack.backend.company.repository.CompanyRepository;
+import com.emreuslu.techstack.backend.ingestion.dto.IngestionRunStatsDto;
 import com.emreuslu.techstack.backend.extraction.dto.ExtractedSkillDto;
 import com.emreuslu.techstack.backend.extraction.service.SkillExtractionService;
 import com.emreuslu.techstack.backend.ingestion.dto.NormalizedJobDto;
@@ -28,27 +29,73 @@ public class IngestionService {
     private final JobSkillService jobSkillService;
 
     @Transactional
-    public void ingestAll(Collection<NormalizedJobDto> jobs) {
+    public IngestionRunStatsDto ingestAll(Collection<NormalizedJobDto> jobs, String source, String token) {
         if (jobs == null || jobs.isEmpty()) {
-            return;
+            return IngestionRunStatsDto.empty(source, token);
         }
 
+        int inserted = 0;
+        int skipped = 0;
+        int softwareRelevant = 0;
+        int extractedSkills = 0;
+        int failures = 0;
+
         for (NormalizedJobDto job : jobs) {
-            if (job != null) {
-                ingestOne(job);
+            if (job == null) {
+                continue;
+            }
+
+            try {
+                IngestionOutcome outcome = ingestOne(job);
+                if (outcome.inserted()) {
+                    inserted++;
+                    extractedSkills += outcome.extractedSkillsCount();
+                } else {
+                    skipped++;
+                }
+                if (outcome.softwareRelevant()) {
+                    softwareRelevant++;
+                }
+            } catch (Exception exception) {
+                failures++;
             }
         }
+
+        return new IngestionRunStatsDto(
+                source,
+                token,
+                jobs.size(),
+                inserted,
+                skipped,
+                softwareRelevant,
+                extractedSkills,
+                failures
+        );
     }
 
     @Transactional
-    public void ingestOne(NormalizedJobDto dto) {
+    public IngestionRunStatsDto ingestAll(Collection<NormalizedJobDto> jobs) {
+        if (jobs == null || jobs.isEmpty()) {
+            return IngestionRunStatsDto.empty("UNKNOWN", "UNKNOWN");
+        }
+
+        String source = jobs.iterator().next() != null ? jobs.iterator().next().source() : "UNKNOWN";
+        return ingestAll(jobs, source, "UNKNOWN");
+    }
+
+    @Transactional
+    public IngestionOutcome ingestOne(NormalizedJobDto dto) {
         validateRequiredFields(dto);
 
-        String externalId = cleanRequired(dto.externalId(), "externalId");
+        String externalId = cleanRequired(dto.externalJobId(), "externalJobId");
         String source = cleanRequired(dto.source(), "source");
 
+        if (!dto.isSoftwareRelevant()) {
+            return IngestionOutcome.skipped(false);
+        }
+
         if (jobRepository.findByExternalIdAndSource(externalId, source).isPresent()) {
-            return;
+            return IngestionOutcome.skipped(true);
         }
 
         Company company = resolveCompany(dto, source);
@@ -56,9 +103,9 @@ public class IngestionService {
         Job job = Job.builder()
                 .externalId(externalId)
                 .source(source)
-                .title(cleanRequired(dto.title(), "title"))
-                .location(cleanRequired(dto.location(), "location"))
-                .description(cleanOptional(dto.description()) != null ? cleanOptional(dto.description()) : "")
+                .title(cleanRequired(dto.normalizedTitle() != null ? dto.normalizedTitle() : dto.rawTitle(), "title"))
+                .location(cleanRequired(dto.locationNormalized() != null ? dto.locationNormalized() : dto.locationRaw(), "location"))
+                .description(cleanOptional(dto.descriptionPlainNormalized()) != null ? cleanOptional(dto.descriptionPlainNormalized()) : "")
                 .applyUrl(cleanRequired(dto.applyUrl(), "applyUrl"))
                 .postedAt(Objects.requireNonNull(dto.postedAt(), "postedAt must not be null"))
                 .company(company)
@@ -66,22 +113,25 @@ public class IngestionService {
 
         Job savedJob = jobRepository.save(job);
 
-        List<ExtractedSkillDto> extractedSkills = skillExtractionService.extractSkills(dto.description());
-        if (extractedSkills.isEmpty()) {
-            return;
+        List<ExtractedSkillDto> extractedSkillDtos = skillExtractionService.extractSkills(
+                dto.analysisText() != null ? dto.analysisText() : dto.descriptionPlainNormalized()
+        );
+        if (extractedSkillDtos.isEmpty()) {
+            return IngestionOutcome.inserted(0, true);
         }
 
-        List<Skill> skills = extractedSkills.stream()
+        List<Skill> skills = extractedSkillDtos.stream()
                 .map(ExtractedSkillDto::name)
                 .map(skillService::findOrCreateByName)
                 .toList();
 
         jobSkillService.linkSkillsToJob(savedJob, skills);
+        return IngestionOutcome.inserted(skills.size(), true);
     }
 
     private Company resolveCompany(NormalizedJobDto dto, String source) {
         String companyName = cleanRequired(dto.companyName(), "companyName");
-        String companyExternalId = cleanOptional(dto.companyExternalId());
+        String companyExternalId = cleanOptional(dto.externalCompanyId());
 
         if (companyExternalId != null) {
             return companyRepository.findByExternalSourceAndExternalCompanyId(source, companyExternalId)
@@ -109,11 +159,11 @@ public class IngestionService {
 
     private void validateRequiredFields(NormalizedJobDto dto) {
         Objects.requireNonNull(dto, "normalized job must not be null");
-        cleanRequired(dto.externalId(), "externalId");
+        cleanRequired(dto.externalJobId(), "externalJobId");
         cleanRequired(dto.source(), "source");
         cleanRequired(dto.companyName(), "companyName");
-        cleanRequired(dto.title(), "title");
-        cleanRequired(dto.location(), "location");
+        cleanRequired(dto.rawTitle(), "rawTitle");
+        cleanRequired(dto.locationRaw(), "locationRaw");
         cleanRequired(dto.applyUrl(), "applyUrl");
         Objects.requireNonNull(dto.postedAt(), "postedAt must not be null");
     }
@@ -133,6 +183,17 @@ public class IngestionService {
 
         String cleaned = value.trim().replaceAll("\\s+", " ");
         return cleaned.isEmpty() ? null : cleaned;
+    }
+
+    public record IngestionOutcome(boolean inserted, int extractedSkillsCount, boolean softwareRelevant) {
+
+        public static IngestionOutcome skipped(boolean softwareRelevant) {
+            return new IngestionOutcome(false, 0, softwareRelevant);
+        }
+
+        public static IngestionOutcome inserted(int extractedSkillsCount, boolean softwareRelevant) {
+            return new IngestionOutcome(true, extractedSkillsCount, softwareRelevant);
+        }
     }
 }
 

@@ -1,18 +1,27 @@
 package com.emreuslu.techstack.backend.integration.lever.mapper;
 
 import com.emreuslu.techstack.backend.ingestion.dto.NormalizedJobDto;
+import com.emreuslu.techstack.backend.ingestion.dto.RoleClassificationResultDto;
+import com.emreuslu.techstack.backend.ingestion.service.SoftwareRoleClassificationService;
+import com.emreuslu.techstack.backend.ingestion.service.TextNormalizationService;
 import com.emreuslu.techstack.backend.integration.lever.dto.LeverJobResponseDto;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 @Component
+@RequiredArgsConstructor
 public class LeverJobMapper {
 
     private static final String SOURCE = "LEVER";
+
+    private final TextNormalizationService textNormalizationService;
+    private final SoftwareRoleClassificationService softwareRoleClassificationService;
 
     public List<NormalizedJobDto> toNormalizedJobs(Collection<LeverJobResponseDto> jobs, String companyToken) {
         if (jobs == null || jobs.isEmpty()) {
@@ -25,29 +34,92 @@ public class LeverJobMapper {
     }
 
     public NormalizedJobDto toNormalizedJob(LeverJobResponseDto job, String companyToken) {
+        String rawTitle = cleanOptional(job.text());
         String companyName = cleanOptional(companyToken);
         String location = job.categories() != null ? cleanOptional(job.categories().location()) : null;
+        String department = job.categories() != null ? cleanOptional(job.categories().department()) : null;
+        String team = job.categories() != null ? cleanOptional(job.categories().team()) : null;
+
+        String descriptionPlain = textNormalizationService.mergeSections(textNormalizationService.nonNullSections(
+                cleanOptional(job.descriptionPlain()),
+                cleanOptional(job.descriptionBodyPlain()),
+                cleanOptional(job.openingPlain()),
+                cleanOptional(job.description()),
+                joinListContents(job.lists())
+        ));
+
+        String analysisText = textNormalizationService.mergeSections(textNormalizationService.nonNullSections(
+                rawTitle,
+                descriptionPlain,
+                department,
+                team,
+                location
+        ));
+
+        RoleClassificationResultDto classification = softwareRoleClassificationService.classify(
+                rawTitle,
+                department,
+                team,
+                analysisText,
+                textNormalizationService
+        );
+
+        LocalDate postedAt = parsePostedAt(job.createdAt(), job.updatedAt());
+        if (postedAt == null) {
+            postedAt = LocalDate.now();
+        }
 
         return new NormalizedJobDto(
-                cleanOptional(job.id()),
                 SOURCE,
+                cleanOptional(job.id()),
                 null,
                 companyName,
-                cleanOptional(job.text()),
+                rawTitle,
+                classification.normalizedTitle(),
+                classification.roleFamily(),
+                classification.roleSubfamily(),
+                classification.softwareRelevant(),
+                classification.relevanceScore(),
+                classification.relevanceReason(),
                 location,
-                resolveDescription(job),
+                location,
+                null,
+                isRemote(location),
+                isHybrid(location),
+                descriptionPlain,
+                analysisText,
                 resolveApplyUrl(job),
-                parsePostedAt(job.createdAt(), job.updatedAt()),
+                postedAt,
+                department,
+                team,
+                SOURCE + ":" + companyToken + ":" + cleanOptional(job.id()),
+                SOURCE + ":" + cleanOptional(job.id()),
                 null
         );
     }
 
-    private String resolveDescription(LeverJobResponseDto job) {
-        String plain = cleanOptional(job.descriptionPlain());
-        if (plain != null) {
-            return plain;
+    private String joinListContents(List<LeverJobResponseDto.ListSectionDto> sections) {
+        if (sections == null || sections.isEmpty()) {
+            return null;
         }
-        return cleanOptional(job.description());
+
+        List<String> values = new ArrayList<>();
+        for (LeverJobResponseDto.ListSectionDto section : sections) {
+            if (section == null) {
+                continue;
+            }
+
+            values.add(cleanOptional(section.text()));
+            if (section.content() != null) {
+                for (LeverJobResponseDto.ListContentDto content : section.content()) {
+                    if (content != null) {
+                        values.add(cleanOptional(content.text()));
+                    }
+                }
+            }
+        }
+
+        return textNormalizationService.mergeSections(values);
     }
 
     private String resolveApplyUrl(LeverJobResponseDto job) {
@@ -72,12 +144,17 @@ public class LeverJobMapper {
     }
 
     private String cleanOptional(String value) {
-        if (value == null) {
-            return null;
-        }
+        return textNormalizationService.clean(value);
+    }
 
-        String cleaned = value.trim().replaceAll("\\s+", " ");
-        return cleaned.isEmpty() ? null : cleaned;
+    private boolean isRemote(String locationRaw) {
+        String lower = locationRaw == null ? null : locationRaw.toLowerCase();
+        return lower != null && lower.contains("remote");
+    }
+
+    private boolean isHybrid(String locationRaw) {
+        String lower = locationRaw == null ? null : locationRaw.toLowerCase();
+        return lower != null && lower.contains("hybrid");
     }
 }
 

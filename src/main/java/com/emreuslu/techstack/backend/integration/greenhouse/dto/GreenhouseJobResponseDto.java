@@ -2,6 +2,7 @@ package com.emreuslu.techstack.backend.integration.greenhouse.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record GreenhouseJobResponseDto(
@@ -9,14 +10,37 @@ public record GreenhouseJobResponseDto(
         String title,
         LocationDto location,
         @JsonProperty("absolute_url") String absoluteUrl,
+        @JsonProperty("first_published") String firstPublished,
         @JsonProperty("updated_at") String updatedAt,
         @JsonProperty("content") String content,
-        @JsonProperty("company_name") String companyName
+        @JsonProperty("company_name") String companyName,
+        List<DepartmentDto> departments,
+        List<OfficeDto> offices,
+        List<MetadataDto> metadata
 ) {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record LocationDto(
             String name
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record DepartmentDto(
+            String name
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record OfficeDto(
+            String name
+    ) {
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record MetadataDto(
+            String name,
+            String value
     ) {
     }
 }
