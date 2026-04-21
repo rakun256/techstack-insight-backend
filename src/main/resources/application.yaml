@@ -30,3 +30,10 @@ integration:
   lever:
     base-url: ${LEVER_BASE_URL:https://api.lever.co}
     postings-path: ${LEVER_POSTINGS_PATH:/v0/postings/{companyToken}}
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui
+
