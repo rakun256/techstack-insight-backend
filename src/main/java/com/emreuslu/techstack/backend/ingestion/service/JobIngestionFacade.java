@@ -10,6 +10,8 @@ import com.emreuslu.techstack.backend.integration.lever.mapper.LeverJobMapper;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +21,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class JobIngestionFacade {
 
+    private static final Set<String> RUN_GUARD = ConcurrentHashMap.newKeySet();
+
     private final IngestionService ingestionService;
     private final GreenhouseClient greenhouseClient;
     private final GreenhouseJobMapper greenhouseJobMapper;
@@ -26,19 +30,26 @@ public class JobIngestionFacade {
     private final LeverJobMapper leverJobMapper;
 
     public IngestionRunStatsDto ingestNormalizedJobs(Collection<NormalizedJobDto> jobs, String source, String token) {
+        long startedAt = System.currentTimeMillis();
         IngestionRunStatsDto stats = ingestionService.ingestAll(jobs, source, token);
+        long duration = System.currentTimeMillis() - startedAt;
+        String status = stats.failureCount() > 0 ? "PARTIAL_SUCCESS" : "SUCCESS";
+        IngestionRunStatsDto finalized = stats.withDurationAndStatus(duration, status);
         log.info(
-                "ingestion_summary source={} token={} fetched={} inserted={} skipped={} softwareRelevant={} extractedSkills={} failures={}",
-                stats.source(),
-                stats.token(),
-                stats.fetchedCount(),
-                stats.insertedCount(),
-                stats.skippedCount(),
-                stats.softwareRelevantCount(),
-                stats.extractedSkillsCount(),
-                stats.failureCount()
+                "ingestion_summary source={} token={} fetched={} inserted={} skipped={} softwareRelevant={} extractedSkills={} failures={} companyReusedAfterDuplicate={} durationMs={} status={}",
+                finalized.source(),
+                finalized.token(),
+                finalized.fetchedCount(),
+                finalized.insertedCount(),
+                finalized.skippedCount(),
+                finalized.softwareRelevantCount(),
+                finalized.extractedSkillsCount(),
+                finalized.failureCount(),
+                finalized.companyReusedAfterDuplicateCount(),
+                finalized.runDurationMs(),
+                finalized.status()
         );
-        return stats;
+        return finalized;
     }
 
     public IngestionRunStatsDto ingestFromGreenhouse(String boardToken) {
@@ -71,11 +82,38 @@ public class JobIngestionFacade {
 
     public IngestionRunStatsDto ingestConfiguredSource(String type, String token) {
         String normalizedType = Objects.requireNonNull(type, "type must not be null").trim().toUpperCase();
-        return switch (normalizedType) {
-            case "GREENHOUSE" -> ingestFromGreenhouse(token);
-            case "LEVER" -> ingestFromLever(token);
-            default -> throw new IllegalArgumentException("Unsupported source type: " + type);
-        };
+        String normalizedToken = Objects.requireNonNull(token, "token must not be null").trim();
+        if (normalizedToken.isEmpty()) {
+            throw new IllegalArgumentException("token must not be blank");
+        }
+
+        String guardKey = normalizedType + ":" + normalizedToken;
+        if (!RUN_GUARD.add(guardKey)) {
+            log.warn("ingestion_overlap_skipped source={} token={}", normalizedType, normalizedToken);
+            return new IngestionRunStatsDto(
+                    normalizedType,
+                    normalizedToken,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0L,
+                    "SKIPPED_ALREADY_RUNNING"
+            );
+        }
+
+        try {
+            return switch (normalizedType) {
+                case "GREENHOUSE" -> ingestFromGreenhouse(normalizedToken);
+                case "LEVER" -> ingestFromLever(normalizedToken);
+                default -> throw new IllegalArgumentException("Unsupported source type: " + type);
+            };
+        } finally {
+            RUN_GUARD.remove(guardKey);
+        }
     }
 
     public List<IngestionRunStatsDto> ingestAllConfiguredSources(List<IngestionProperties.Source> sources) {
