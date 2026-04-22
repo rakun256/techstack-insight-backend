@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.emreuslu.techstack.backend.ingestion.dto.IngestionRunStatsDto;
+import com.emreuslu.techstack.backend.ingestion.dto.IngestionProperties;
 import com.emreuslu.techstack.backend.ingestion.dto.NormalizedJobDto;
 import com.emreuslu.techstack.backend.integration.greenhouse.client.GreenhouseClient;
 import com.emreuslu.techstack.backend.integration.greenhouse.dto.GreenhouseJobResponseDto;
@@ -104,6 +105,32 @@ class JobIngestionFacadeTest {
         releaseFirstCall.countDown();
         IngestionRunStatsDto firstResult = firstRun.get(2, TimeUnit.SECONDS);
         assertThat(firstResult.status()).isEqualTo("SUCCESS");
+    }
+
+    @Test
+    void continuesWithNextSourceWhenOneConfiguredSourceFails() {
+        IngestionProperties.Source greenhouse = new IngestionProperties.Source();
+        greenhouse.setType("GREENHOUSE");
+        greenhouse.setToken("vercel");
+
+        IngestionProperties.Source lever = new IngestionProperties.Source();
+        lever.setType("LEVER");
+        lever.setToken("plaid");
+
+        when(greenhouseClient.fetchJobs("vercel")).thenThrow(new IllegalStateException("metadata parse failed"));
+        when(leverClient.fetchJobs("plaid")).thenReturn(List.of());
+        when(leverJobMapper.toNormalizedJobs(any(), any())).thenReturn(List.of());
+        when(ingestionService.ingestAll(any(), any(), any())).thenReturn(
+                new IngestionRunStatsDto("LEVER", "plaid", 0, 0, 0, 0, 0, 0, 0, 0L, "SUCCESS")
+        );
+
+        List<IngestionRunStatsDto> results = facade.ingestAllConfiguredSources(List.of(greenhouse, lever));
+
+        assertThat(results).hasSize(2);
+        assertThat(results.get(0).source()).isEqualTo("GREENHOUSE");
+        assertThat(results.get(0).status()).isEqualTo("FAILED_SOURCE");
+        assertThat(results.get(1).source()).isEqualTo("LEVER");
+        assertThat(results.get(1).status()).isEqualTo("SUCCESS");
     }
 }
 

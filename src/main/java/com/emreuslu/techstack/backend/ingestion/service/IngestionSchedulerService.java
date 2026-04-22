@@ -29,7 +29,17 @@ public class IngestionSchedulerService {
             if (!source.isEnabled()) {
                 continue;
             }
-            jobIngestionFacade.ingestConfiguredSource(source.getType(), source.getToken());
+            try {
+                jobIngestionFacade.ingestConfiguredSource(source.getType(), source.getToken());
+            } catch (Exception exception) {
+                log.error(
+                        "scheduled_ingestion_source_failed source={} token={} reason={}",
+                        source.getType(),
+                        source.getToken(),
+                        exception.getMessage(),
+                        exception
+                );
+            }
         }
     }
 }

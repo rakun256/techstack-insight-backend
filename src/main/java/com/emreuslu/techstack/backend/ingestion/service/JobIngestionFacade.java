@@ -121,10 +121,40 @@ public class JobIngestionFacade {
             return List.of();
         }
 
-        return sources.stream()
-                .filter(IngestionProperties.Source::isEnabled)
-                .map(source -> ingestConfiguredSource(source.getType(), source.getToken()))
-                .toList();
+        List<IngestionRunStatsDto> results = new java.util.ArrayList<>();
+        for (IngestionProperties.Source source : sources) {
+            if (!source.isEnabled()) {
+                continue;
+            }
+
+            try {
+                results.add(ingestConfiguredSource(source.getType(), source.getToken()));
+            } catch (Exception exception) {
+                String normalizedType = source.getType() == null ? "UNKNOWN" : source.getType().trim().toUpperCase();
+                String normalizedToken = source.getToken() == null ? "UNKNOWN" : source.getToken().trim();
+                log.error(
+                        "ingestion_source_failed source={} token={} reason={}",
+                        normalizedType,
+                        normalizedToken,
+                        exception.getMessage(),
+                        exception
+                );
+                results.add(new IngestionRunStatsDto(
+                        normalizedType,
+                        normalizedToken,
+                        0,
+                        0,
+                        0,
+                        0,
+                        0,
+                        1,
+                        0,
+                        0L,
+                        "FAILED_SOURCE"
+                ));
+            }
+        }
+        return List.copyOf(results);
     }
 }
 

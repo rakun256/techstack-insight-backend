@@ -5,11 +5,13 @@ import com.emreuslu.techstack.backend.ingestion.dto.RoleClassificationResultDto;
 import com.emreuslu.techstack.backend.ingestion.service.SoftwareRoleClassificationService;
 import com.emreuslu.techstack.backend.ingestion.service.TextNormalizationService;
 import com.emreuslu.techstack.backend.integration.greenhouse.dto.GreenhouseJobResponseDto;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -140,9 +142,40 @@ public class GreenhouseJobMapper {
                 continue;
             }
             sections.add(textNormalizationService.clean(entry.name()));
-            sections.add(textNormalizationService.clean(entry.value()));
+            sections.add(normalizeMetadataValue(entry.value()));
         }
         return textNormalizationService.mergeSections(sections);
+    }
+
+    private String normalizeMetadataValue(JsonNode value) {
+        if (value == null || value.isNull() || value.isMissingNode()) {
+            return null;
+        }
+
+        if (value.isTextual() || value.isNumber() || value.isBoolean()) {
+            return textNormalizationService.clean(value.asText());
+        }
+
+        if (value.isArray()) {
+            List<String> sections = new ArrayList<>();
+            for (JsonNode child : value) {
+                sections.add(normalizeMetadataValue(child));
+            }
+            return textNormalizationService.mergeSections(sections);
+        }
+
+        if (value.isObject()) {
+            List<String> sections = new ArrayList<>();
+            Iterator<String> fieldNames = value.fieldNames();
+            while (fieldNames.hasNext()) {
+                String fieldName = fieldNames.next();
+                sections.add(textNormalizationService.clean(fieldName));
+                sections.add(normalizeMetadataValue(value.get(fieldName)));
+            }
+            return textNormalizationService.mergeSections(sections);
+        }
+
+        return textNormalizationService.clean(value.toString());
     }
 
     private LocalDate parsePostedAt(String updatedAt) {
