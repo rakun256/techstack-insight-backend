@@ -2,6 +2,7 @@ package com.emreuslu.techstack.backend.integration.lever.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -32,13 +33,7 @@ public record LeverJobResponseDto(
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ListSectionDto(
             String text,
-            List<ListContentDto> content
-    ) {
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ListContentDto(
-            String text
+            JsonNode content
     ) {
     }
 }

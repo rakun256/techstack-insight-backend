@@ -5,11 +5,13 @@ import com.emreuslu.techstack.backend.ingestion.dto.RoleClassificationResultDto;
 import com.emreuslu.techstack.backend.ingestion.service.SoftwareRoleClassificationService;
 import com.emreuslu.techstack.backend.ingestion.service.TextNormalizationService;
 import com.emreuslu.techstack.backend.integration.lever.dto.LeverJobResponseDto;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -110,16 +112,41 @@ public class LeverJobMapper {
             }
 
             values.add(cleanOptional(section.text()));
-            if (section.content() != null) {
-                for (LeverJobResponseDto.ListContentDto content : section.content()) {
-                    if (content != null) {
-                        values.add(cleanOptional(content.text()));
-                    }
-                }
-            }
+            values.add(normalizeListContent(section.content()));
         }
 
         return textNormalizationService.mergeSections(values);
+    }
+
+    private String normalizeListContent(JsonNode content) {
+        if (content == null || content.isNull() || content.isMissingNode()) {
+            return null;
+        }
+
+        if (content.isTextual() || content.isNumber() || content.isBoolean()) {
+            return cleanOptional(content.asText());
+        }
+
+        if (content.isArray()) {
+            List<String> values = new ArrayList<>();
+            for (JsonNode item : content) {
+                values.add(normalizeListContent(item));
+            }
+            return textNormalizationService.mergeSections(values);
+        }
+
+        if (content.isObject()) {
+            List<String> values = new ArrayList<>();
+            Iterator<String> fields = content.fieldNames();
+            while (fields.hasNext()) {
+                String field = fields.next();
+                values.add(cleanOptional(field));
+                values.add(normalizeListContent(content.get(field)));
+            }
+            return textNormalizationService.mergeSections(values);
+        }
+
+        return cleanOptional(content.toString());
     }
 
     private String resolveApplyUrl(LeverJobResponseDto job) {
