@@ -10,19 +10,14 @@ import org.springframework.stereotype.Component;
 @Getter
 @Setter
 @Component
-@ConfigurationProperties(prefix = "ingestion")
+@ConfigurationProperties(prefix = "app.ingestion")
 public class IngestionProperties {
 
-    private Scheduler scheduler = new Scheduler();
+    private boolean runOnStartup = false;
+    private boolean schedulerEnabled = false;
+    private String schedulerCron = "0 0 3 * * *";
     private List<Source> sources = new ArrayList<>();
 
-    @Getter
-    @Setter
-    public static class Scheduler {
-        private long fixedDelayMs = 3600000;
-        private long initialDelayMs = 30000;
-        private boolean enabled = true;
-    }
 
     @Getter
     @Setter

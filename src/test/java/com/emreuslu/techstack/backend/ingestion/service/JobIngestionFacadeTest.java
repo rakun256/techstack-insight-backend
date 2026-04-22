@@ -48,7 +48,7 @@ class JobIngestionFacadeTest {
     }
 
     @Test
-    void preventsConcurrentRunForSameSourceToken() throws Exception {
+    void preventsConcurrentRunForSameSourceTokenAcrossTriggers() throws Exception {
         CountDownLatch firstCallEntered = new CountDownLatch(1);
         CountDownLatch releaseFirstCall = new CountDownLatch(1);
 
@@ -99,7 +99,11 @@ class JobIngestionFacadeTest {
 
         assertThat(firstCallEntered.await(1, TimeUnit.SECONDS)).isTrue();
 
-        IngestionRunStatsDto secondRun = facade.ingestConfiguredSource("GREENHOUSE", "vercel");
+        IngestionRunStatsDto secondRun = facade.ingestConfiguredSource(
+                "GREENHOUSE",
+                "vercel",
+                JobIngestionFacade.TRIGGER_SCHEDULED
+        );
         assertThat(secondRun.status()).isEqualTo("SKIPPED_ALREADY_RUNNING");
 
         releaseFirstCall.countDown();
@@ -124,7 +128,10 @@ class JobIngestionFacadeTest {
                 new IngestionRunStatsDto("LEVER", "plaid", 0, 0, 0, 0, 0, 0, 0, 0L, "SUCCESS")
         );
 
-        List<IngestionRunStatsDto> results = facade.ingestAllConfiguredSources(List.of(greenhouse, lever));
+        List<IngestionRunStatsDto> results = facade.ingestAllConfiguredSources(
+                List.of(greenhouse, lever),
+                JobIngestionFacade.TRIGGER_SCHEDULED
+        );
 
         assertThat(results).hasSize(2);
         assertThat(results.get(0).source()).isEqualTo("GREENHOUSE");

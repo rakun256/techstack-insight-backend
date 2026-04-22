@@ -21,6 +21,10 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class JobIngestionFacade {
 
+    public static final String TRIGGER_MANUAL = "MANUAL";
+    public static final String TRIGGER_STARTUP = "STARTUP";
+    public static final String TRIGGER_SCHEDULED = "SCHEDULED";
+
     private static final Set<String> RUN_GUARD = ConcurrentHashMap.newKeySet();
 
     private final IngestionService ingestionService;
@@ -30,13 +34,24 @@ public class JobIngestionFacade {
     private final LeverJobMapper leverJobMapper;
 
     public IngestionRunStatsDto ingestNormalizedJobs(Collection<NormalizedJobDto> jobs, String source, String token) {
+        return ingestNormalizedJobs(jobs, source, token, TRIGGER_MANUAL);
+    }
+
+    public IngestionRunStatsDto ingestNormalizedJobs(
+            Collection<NormalizedJobDto> jobs,
+            String source,
+            String token,
+            String triggerType
+    ) {
+        String normalizedTrigger = normalizeTrigger(triggerType);
         long startedAt = System.currentTimeMillis();
         IngestionRunStatsDto stats = ingestionService.ingestAll(jobs, source, token);
         long duration = System.currentTimeMillis() - startedAt;
         String status = stats.failureCount() > 0 ? "PARTIAL_SUCCESS" : "SUCCESS";
         IngestionRunStatsDto finalized = stats.withDurationAndStatus(duration, status);
         log.info(
-                "ingestion_summary source={} token={} fetched={} inserted={} skipped={} softwareRelevant={} extractedSkills={} failures={} companyReusedAfterDuplicate={} durationMs={} status={}",
+                "ingestion_summary trigger={} source={} token={} fetched={} inserted={} skipped={} softwareRelevant={} extractedSkills={} failures={} companyReusedAfterDuplicate={} durationMs={} status={}",
+                normalizedTrigger,
                 finalized.source(),
                 finalized.token(),
                 finalized.fetchedCount(),
@@ -53,6 +68,10 @@ public class JobIngestionFacade {
     }
 
     public IngestionRunStatsDto ingestFromGreenhouse(String boardToken) {
+        return ingestFromGreenhouse(boardToken, TRIGGER_MANUAL);
+    }
+
+    public IngestionRunStatsDto ingestFromGreenhouse(String boardToken, String triggerType) {
         String normalizedBoardToken = Objects.requireNonNull(boardToken, "boardToken must not be null").trim();
         if (normalizedBoardToken.isEmpty()) {
             throw new IllegalArgumentException("boardToken must not be blank");
@@ -63,10 +82,14 @@ public class JobIngestionFacade {
                 normalizedBoardToken
         );
 
-        return ingestNormalizedJobs(normalizedJobs, "GREENHOUSE", normalizedBoardToken);
+        return ingestNormalizedJobs(normalizedJobs, "GREENHOUSE", normalizedBoardToken, triggerType);
     }
 
     public IngestionRunStatsDto ingestFromLever(String companyToken) {
+        return ingestFromLever(companyToken, TRIGGER_MANUAL);
+    }
+
+    public IngestionRunStatsDto ingestFromLever(String companyToken, String triggerType) {
         String normalizedCompanyToken = Objects.requireNonNull(companyToken, "companyToken must not be null").trim();
         if (normalizedCompanyToken.isEmpty()) {
             throw new IllegalArgumentException("companyToken must not be blank");
@@ -77,10 +100,15 @@ public class JobIngestionFacade {
                 normalizedCompanyToken
         );
 
-        return ingestNormalizedJobs(normalizedJobs, "LEVER", normalizedCompanyToken);
+        return ingestNormalizedJobs(normalizedJobs, "LEVER", normalizedCompanyToken, triggerType);
     }
 
     public IngestionRunStatsDto ingestConfiguredSource(String type, String token) {
+        return ingestConfiguredSource(type, token, TRIGGER_MANUAL);
+    }
+
+    public IngestionRunStatsDto ingestConfiguredSource(String type, String token, String triggerType) {
+        String normalizedTrigger = normalizeTrigger(triggerType);
         String normalizedType = Objects.requireNonNull(type, "type must not be null").trim().toUpperCase();
         String normalizedToken = Objects.requireNonNull(token, "token must not be null").trim();
         if (normalizedToken.isEmpty()) {
@@ -89,7 +117,12 @@ public class JobIngestionFacade {
 
         String guardKey = normalizedType + ":" + normalizedToken;
         if (!RUN_GUARD.add(guardKey)) {
-            log.warn("ingestion_overlap_skipped source={} token={}", normalizedType, normalizedToken);
+            log.warn(
+                    "ingestion_overlap_skipped trigger={} source={} token={}",
+                    normalizedTrigger,
+                    normalizedType,
+                    normalizedToken
+            );
             return new IngestionRunStatsDto(
                     normalizedType,
                     normalizedToken,
@@ -107,8 +140,8 @@ public class JobIngestionFacade {
 
         try {
             return switch (normalizedType) {
-                case "GREENHOUSE" -> ingestFromGreenhouse(normalizedToken);
-                case "LEVER" -> ingestFromLever(normalizedToken);
+                case "GREENHOUSE" -> ingestFromGreenhouse(normalizedToken, normalizedTrigger);
+                case "LEVER" -> ingestFromLever(normalizedToken, normalizedTrigger);
                 default -> throw new IllegalArgumentException("Unsupported source type: " + type);
             };
         } finally {
@@ -117,6 +150,14 @@ public class JobIngestionFacade {
     }
 
     public List<IngestionRunStatsDto> ingestAllConfiguredSources(List<IngestionProperties.Source> sources) {
+        return ingestAllConfiguredSources(sources, TRIGGER_MANUAL);
+    }
+
+    public List<IngestionRunStatsDto> ingestAllConfiguredSources(
+            List<IngestionProperties.Source> sources,
+            String triggerType
+    ) {
+        String normalizedTrigger = normalizeTrigger(triggerType);
         if (sources == null || sources.isEmpty()) {
             return List.of();
         }
@@ -128,12 +169,13 @@ public class JobIngestionFacade {
             }
 
             try {
-                results.add(ingestConfiguredSource(source.getType(), source.getToken()));
+                results.add(ingestConfiguredSource(source.getType(), source.getToken(), normalizedTrigger));
             } catch (Exception exception) {
                 String normalizedType = source.getType() == null ? "UNKNOWN" : source.getType().trim().toUpperCase();
                 String normalizedToken = source.getToken() == null ? "UNKNOWN" : source.getToken().trim();
                 log.error(
-                        "ingestion_source_failed source={} token={} reason={}",
+                        "ingestion_source_failed trigger={} source={} token={} reason={}",
+                        normalizedTrigger,
                         normalizedType,
                         normalizedToken,
                         exception.getMessage(),
@@ -155,6 +197,13 @@ public class JobIngestionFacade {
             }
         }
         return List.copyOf(results);
+    }
+
+    private String normalizeTrigger(String triggerType) {
+        if (triggerType == null || triggerType.isBlank()) {
+            return TRIGGER_MANUAL;
+        }
+        return triggerType.trim().toUpperCase();
     }
 }
 

@@ -1,7 +1,7 @@
-    package com.emreuslu.techstack.backend.ingestion.service;
+package com.emreuslu.techstack.backend.ingestion.service;
 
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -34,15 +34,51 @@ class IngestionSchedulerServiceTest {
     }
 
     @Test
-    void continuesProcessingSourcesWhenOneSourceFails() {
-        doThrow(new IllegalStateException("parse failed"))
-                .when(jobIngestionFacade)
-                .ingestConfiguredSource("GREENHOUSE", "vercel");
+    void skipsStartupIngestionWhenDisabled() {
+        ingestionProperties.setRunOnStartup(false);
+
+        schedulerService.runStartupIngestion();
+
+        verify(jobIngestionFacade, never()).ingestAllConfiguredSources(
+                ingestionProperties.getSources(),
+                JobIngestionFacade.TRIGGER_STARTUP
+        );
+    }
+
+    @Test
+    void runsStartupIngestionWhenEnabled() {
+        ingestionProperties.setRunOnStartup(true);
+
+        schedulerService.runStartupIngestion();
+
+        verify(jobIngestionFacade, times(1)).ingestAllConfiguredSources(
+                ingestionProperties.getSources(),
+                JobIngestionFacade.TRIGGER_STARTUP
+        );
+    }
+
+    @Test
+    void skipsScheduledIngestionWhenDisabled() {
+        ingestionProperties.setSchedulerEnabled(false);
 
         schedulerService.runScheduledIngestion();
 
-        verify(jobIngestionFacade, times(1)).ingestConfiguredSource("GREENHOUSE", "vercel");
-        verify(jobIngestionFacade, times(1)).ingestConfiguredSource("LEVER", "plaid");
+        verify(jobIngestionFacade, never()).ingestAllConfiguredSources(
+                ingestionProperties.getSources(),
+                JobIngestionFacade.TRIGGER_SCHEDULED
+        );
+    }
+
+    @Test
+    void runsScheduledIngestionWhenEnabled() {
+        ingestionProperties.setSchedulerEnabled(true);
+
+        schedulerService.runScheduledIngestion();
+
+        verify(jobIngestionFacade, times(1)).ingestAllConfiguredSources(
+                ingestionProperties.getSources(),
+                JobIngestionFacade.TRIGGER_SCHEDULED
+        );
     }
 }
 

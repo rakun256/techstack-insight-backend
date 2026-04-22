@@ -25,7 +25,12 @@ public class IngestionAdminController {
     @PostMapping("/run")
     @Operation(summary = "Run ingestion for all enabled configured sources")
     public ResponseEntity<List<IngestionRunStatsDto>> runAllEnabledSources() {
-        return ResponseEntity.ok(jobIngestionFacade.ingestAllConfiguredSources(ingestionProperties.getSources()));
+        return ResponseEntity.ok(
+                jobIngestionFacade.ingestAllConfiguredSources(
+                        ingestionProperties.getSources(),
+                        JobIngestionFacade.TRIGGER_MANUAL
+                )
+        );
     }
 
     @PostMapping("/run-source")
@@ -34,7 +39,7 @@ public class IngestionAdminController {
             @RequestParam String type,
             @RequestParam String token
     ) {
-        return ResponseEntity.ok(jobIngestionFacade.ingestConfiguredSource(type, token));
+        return ResponseEntity.ok(jobIngestionFacade.ingestConfiguredSource(type, token, JobIngestionFacade.TRIGGER_MANUAL));
     }
 }
 
