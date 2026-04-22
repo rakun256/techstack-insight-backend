@@ -1,0 +1,15 @@
+.git
+.gitignore
+.gradle
+build
+out
+node_modules
+.idea
+.vscode
+.DS_Store
+*.iml
+*.log
+.env
+.env.*
+coverage
+
