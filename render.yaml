@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: techstack-insight-backend
+    env: java
+    buildCommand: ./gradlew clean build -x test
+    startCommand: java -Dspring.profiles.active=prod -jar build/libs/*.jar
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: APP_INGESTION_RUN_ON_STARTUP
+        value: "true"
+      - key: APP_INGESTION_SCHEDULER_ENABLED
+        value: "true"
+      - key: APP_INGESTION_SCHEDULER_CRON
+        value: "0 0 3 * * *"
+      - key: SPRINGDOC_ENABLED
+        value: "false"
+

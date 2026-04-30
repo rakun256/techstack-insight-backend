@@ -1,27 +1,19 @@
 spring:
   application:
     name: techstack-insight-backend
-
-  datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/techstack_insight}
-    username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:postgres}
-    driver-class-name: org.postgresql.Driver
-
-  jpa:
-    hibernate:
-      ddl-auto: update
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
+  profiles:
+    default: dev
 
   sql:
     init:
       mode: never
 
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
 server:
-  port: 8080
+  port: ${PORT:8080}
+  shutdown: graceful
 
 integration:
   greenhouse:
@@ -33,9 +25,6 @@ integration:
 
 app:
   ingestion:
-    run-on-startup: ${APP_INGESTION_RUN_ON_STARTUP:false}
-    scheduler-enabled: ${APP_INGESTION_SCHEDULER_ENABLED:false}
-    scheduler-cron: ${APP_INGESTION_SCHEDULER_CRON:0 0 3 * * *}
     sources:
       - type: GREENHOUSE
         token: vercel
@@ -67,4 +56,15 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
 
