@@ -5,7 +5,10 @@ import com.emreuslu.techstack.backend.ingestion.dto.RoleClassificationResultDto;
 import com.emreuslu.techstack.backend.ingestion.service.SoftwareRoleClassificationService;
 import com.emreuslu.techstack.backend.ingestion.service.TextNormalizationService;
 import com.emreuslu.techstack.backend.integration.greenhouse.dto.GreenhouseJobResponseDto;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -14,10 +17,12 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class GreenhouseJobMapper {
 
     private static final String SOURCE = "GREENHOUSE";
@@ -69,6 +74,15 @@ public class GreenhouseJobMapper {
             postedAt = LocalDate.now();
         }
 
+        // Capture raw job JSON for audit trail
+        String rawJobJson = null;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            rawJobJson = mapper.writeValueAsString(job);
+        } catch (JsonProcessingException e) {
+            log.debug("Could not serialize Greenhouse job to JSON for audit: {}", e.getMessage());
+        }
+
         return new NormalizedJobDto(
                 SOURCE,
                 job.id() != null ? String.valueOf(job.id()) : null,
@@ -94,7 +108,8 @@ public class GreenhouseJobMapper {
                 null,
                 SOURCE + ":" + boardToken + ":" + job.id(),
                 SOURCE + ":" + job.id(),
-                metadataRaw
+                metadataRaw,
+                rawJobJson
         );
     }
 

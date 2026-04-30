@@ -5,7 +5,9 @@ import com.emreuslu.techstack.backend.ingestion.dto.RoleClassificationResultDto;
 import com.emreuslu.techstack.backend.ingestion.service.SoftwareRoleClassificationService;
 import com.emreuslu.techstack.backend.ingestion.service.TextNormalizationService;
 import com.emreuslu.techstack.backend.integration.lever.dto.LeverJobResponseDto;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -14,10 +16,12 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class LeverJobMapper {
 
     private static final String SOURCE = "LEVER";
@@ -71,6 +75,15 @@ public class LeverJobMapper {
             postedAt = LocalDate.now();
         }
 
+        // Capture raw job JSON for audit trail
+        String rawJobJson = null;
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            rawJobJson = mapper.writeValueAsString(job);
+        } catch (JsonProcessingException e) {
+            log.debug("Could not serialize Lever job to JSON for audit: {}", e.getMessage());
+        }
+
         return new NormalizedJobDto(
                 SOURCE,
                 cleanOptional(job.id()),
@@ -96,7 +109,8 @@ public class LeverJobMapper {
                 team,
                 SOURCE + ":" + companyToken + ":" + cleanOptional(job.id()),
                 SOURCE + ":" + cleanOptional(job.id()),
-                null
+                null,
+                rawJobJson
         );
     }
 

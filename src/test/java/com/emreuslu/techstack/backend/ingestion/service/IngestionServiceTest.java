@@ -50,7 +50,8 @@ class IngestionServiceTest {
                 "Revenue",
                 "LEVER:plaid:job-100",
                 "LEVER:job-100",
-                null
+                null,
+                null  // rawJobJson
         );
 
         when(ingestionItemPersistenceService.persistOne(dto)).thenReturn(IngestionItemResultDto.skipped(false));
@@ -88,7 +89,8 @@ class IngestionServiceTest {
                 "Platform",
                 "LEVER:plaid:job-200",
                 "LEVER:job-200",
-                null
+                null,
+                null  // rawJobJson
         );
 
         NormalizedJobDto second = new NormalizedJobDto(
@@ -116,7 +118,8 @@ class IngestionServiceTest {
                 "Platform",
                 "LEVER:plaid:job-201",
                 "LEVER:job-201",
-                null
+                null,
+                null  // rawJobJson
         );
 
         when(ingestionItemPersistenceService.persistOne(first))

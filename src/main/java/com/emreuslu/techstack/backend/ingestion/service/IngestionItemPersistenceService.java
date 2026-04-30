@@ -12,6 +12,7 @@ import com.emreuslu.techstack.backend.job.repository.JobRepository;
 import com.emreuslu.techstack.backend.jobskill.service.JobSkillService;
 import com.emreuslu.techstack.backend.skill.entity.Skill;
 import com.emreuslu.techstack.backend.skill.service.SkillService;
+import com.emreuslu.techstack.backend.skill.service.SkillAliasService;
 import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +28,9 @@ public class IngestionItemPersistenceService {
     private final JobRepository jobRepository;
     private final SkillExtractionService skillExtractionService;
     private final SkillService skillService;
+    private final SkillAliasService skillAliasService;
     private final JobSkillService jobSkillService;
+    private final RawJobPayloadService rawJobPayloadService;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public IngestionItemResultDto persistOne(NormalizedJobDto dto) {
@@ -35,6 +38,15 @@ public class IngestionItemPersistenceService {
 
         String externalId = cleanRequired(dto.externalJobId(), "externalJobId");
         String source = cleanRequired(dto.source(), "source");
+
+        // Save raw payload for audit/debug if available
+        if (dto.rawJobJson() != null) {
+            try {
+                rawJobPayloadService.saveRawPayload(source, externalId, null, dto.rawJobJson());
+            } catch (Exception e) {
+                // Log but don't fail - raw payload is for debugging, not critical
+            }
+        }
 
         if (!dto.isSoftwareRelevant()) {
             return IngestionItemResultDto.skipped(false);
@@ -81,11 +93,18 @@ public class IngestionItemPersistenceService {
 
         List<Skill> skills = extractedSkillDtos.stream()
                 .map(ExtractedSkillDto::name)
+                .map(this::resolveSkillAlias)
                 .map(skillService::findOrCreateByName)
                 .toList();
 
         jobSkillService.linkSkillsToJob(savedJob, skills);
         return IngestionItemResultDto.inserted(skills.size(), companyResolution.reusedAfterDuplicate());
+    }
+
+    private String resolveSkillAlias(String skillName) {
+        // If skill has an alias, resolve to canonical name
+        var canonicalSkill = skillAliasService.resolveAlias(skillName);
+        return canonicalSkill.map(Skill::getName).orElse(skillName);
     }
 
     private void validateRequiredFields(NormalizedJobDto dto) {

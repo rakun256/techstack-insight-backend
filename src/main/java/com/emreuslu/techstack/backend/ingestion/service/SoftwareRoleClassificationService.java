@@ -1,6 +1,8 @@
 package com.emreuslu.techstack.backend.ingestion.service;
 
 import com.emreuslu.techstack.backend.ingestion.dto.RoleClassificationResultDto;
+import com.emreuslu.techstack.backend.job.entity.TitleAlias;
+import com.emreuslu.techstack.backend.job.service.TitleAliasService;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
@@ -9,6 +11,8 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class SoftwareRoleClassificationService {
+
+    private final TitleAliasService titleAliasService;
 
     private static final List<String> NON_TECH_KEYWORDS = List.of(
             "sales", "account executive", "account development", "business development", "customer success",
@@ -27,6 +31,12 @@ public class SoftwareRoleClassificationService {
             String analysisText,
             TextNormalizationService textNormalizationService
     ) {
+        // Check title aliases first for fastest, most predictable classification
+        RoleClassificationResultDto aliasMatch = checkTitleAliases(rawTitle);
+        if (aliasMatch != null) {
+            return aliasMatch;
+        }
+
         String normalizedTitle = textNormalizationService.normalizeTitle(rawTitle);
         String titleLower = lower(normalizedTitle);
         String departmentLower = lower(departmentRaw);
@@ -177,6 +187,27 @@ public class SoftwareRoleClassificationService {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private RoleClassificationResultDto checkTitleAliases(String rawTitle) {
+        if (rawTitle == null || rawTitle.isBlank()) {
+            return null;
+        }
+
+        List<TitleAlias> activeAliases = titleAliasService.getActiveTitleAliases();
+        for (TitleAlias alias : activeAliases) {
+            if (rawTitle.equalsIgnoreCase(alias.getRawTitlePattern())) {
+                return new RoleClassificationResultDto(
+                        alias.getNormalizedTitle(),
+                        alias.getRoleFamily(),
+                        alias.getRoleSubfamily(),
+                        true,  // software-relevant if matched in title_aliases
+                        85,    // high relevance score
+                        "title alias match"
+                );
+            }
+        }
+        return null;
     }
 }
 

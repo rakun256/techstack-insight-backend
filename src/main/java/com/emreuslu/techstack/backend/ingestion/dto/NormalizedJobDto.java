@@ -27,7 +27,8 @@ public record NormalizedJobDto(
         String teamRaw,
         String sourceFingerprint,
         String dedupeKey,
-        String rawMetadata
+        String rawMetadata,
+        String rawJobJson
 ) {
 }
 
