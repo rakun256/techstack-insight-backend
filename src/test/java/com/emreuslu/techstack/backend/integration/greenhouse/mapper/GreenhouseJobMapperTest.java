@@ -1,11 +1,13 @@
 package com.emreuslu.techstack.backend.integration.greenhouse.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.emreuslu.techstack.backend.ingestion.dto.NormalizedJobDto;
 import com.emreuslu.techstack.backend.ingestion.service.SoftwareRoleClassificationService;
 import com.emreuslu.techstack.backend.ingestion.service.TextNormalizationService;
 import com.emreuslu.techstack.backend.integration.greenhouse.dto.GreenhouseJobResponseDto;
+import com.emreuslu.techstack.backend.job.service.TitleAliasService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.List;
@@ -20,7 +22,11 @@ class GreenhouseJobMapperTest {
 
     @BeforeEach
     void setUp() {
-        mapper = new GreenhouseJobMapper(new TextNormalizationService(), new SoftwareRoleClassificationService());
+        TitleAliasService titleAliasService = mock(TitleAliasService.class);
+        mapper = new GreenhouseJobMapper(
+                new TextNormalizationService(),
+                new SoftwareRoleClassificationService(titleAliasService)
+        );
     }
 
     @Test

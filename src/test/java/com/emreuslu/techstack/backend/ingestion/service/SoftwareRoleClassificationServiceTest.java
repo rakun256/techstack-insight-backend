@@ -1,8 +1,10 @@
 package com.emreuslu.techstack.backend.ingestion.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import com.emreuslu.techstack.backend.ingestion.dto.RoleClassificationResultDto;
+import com.emreuslu.techstack.backend.job.service.TitleAliasService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -13,7 +15,8 @@ class SoftwareRoleClassificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new SoftwareRoleClassificationService();
+        TitleAliasService titleAliasService = mock(TitleAliasService.class);
+        service = new SoftwareRoleClassificationService(titleAliasService);
         textNormalizationService = new TextNormalizationService();
     }
 

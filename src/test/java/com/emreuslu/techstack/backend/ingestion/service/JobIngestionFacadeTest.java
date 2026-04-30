@@ -2,10 +2,10 @@ package com.emreuslu.techstack.backend.ingestion.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.emreuslu.techstack.backend.ingestion.dto.IngestionRunStatsDto;
-import com.emreuslu.techstack.backend.ingestion.dto.IngestionProperties;
 import com.emreuslu.techstack.backend.ingestion.dto.NormalizedJobDto;
 import com.emreuslu.techstack.backend.integration.greenhouse.client.GreenhouseClient;
 import com.emreuslu.techstack.backend.integration.greenhouse.dto.GreenhouseJobResponseDto;
@@ -28,6 +28,7 @@ class JobIngestionFacadeTest {
     private GreenhouseJobMapper greenhouseJobMapper;
     private LeverClient leverClient;
     private LeverJobMapper leverJobMapper;
+    private IngestionRunService ingestionRunService;
     private JobIngestionFacade facade;
 
     @BeforeEach
@@ -37,13 +38,15 @@ class JobIngestionFacadeTest {
         greenhouseJobMapper = Mockito.mock(GreenhouseJobMapper.class);
         leverClient = Mockito.mock(LeverClient.class);
         leverJobMapper = Mockito.mock(LeverJobMapper.class);
+        ingestionRunService = Mockito.mock(IngestionRunService.class);
 
         facade = new JobIngestionFacade(
                 ingestionService,
                 greenhouseClient,
                 greenhouseJobMapper,
                 leverClient,
-                leverJobMapper
+                leverJobMapper,
+                ingestionRunService
         );
     }
 
@@ -54,7 +57,7 @@ class JobIngestionFacadeTest {
 
         when(greenhouseClient.fetchJobs("vercel")).thenAnswer(invocation -> {
             firstCallEntered.countDown();
-            releaseFirstCall.await(2, TimeUnit.SECONDS);
+            boolean released = releaseFirstCall.await(2, TimeUnit.SECONDS);
             return List.<GreenhouseJobResponseDto>of();
         });
 
@@ -84,7 +87,8 @@ class JobIngestionFacadeTest {
                         null,
                         "fp",
                         "dk",
-                        null
+                        null,
+                        null  // rawJobJson
                 )
         );
 

@@ -32,6 +32,7 @@ public class JobIngestionFacade {
     private final GreenhouseJobMapper greenhouseJobMapper;
     private final LeverClient leverClient;
     private final LeverJobMapper leverJobMapper;
+    private final IngestionRunService ingestionRunService;
 
     public IngestionRunStatsDto ingestNormalizedJobs(Collection<NormalizedJobDto> jobs, String source, String token) {
         return ingestNormalizedJobs(jobs, source, token, TRIGGER_MANUAL);
@@ -64,9 +65,18 @@ public class JobIngestionFacade {
                 finalized.runDurationMs(),
                 finalized.status()
         );
+
+        // Persist the run record
+        try {
+            ingestionRunService.saveIngestionRun(finalized, normalizedTrigger);
+        } catch (Exception e) {
+            log.warn("Failed to save ingestion run record: {}", e.getMessage());
+        }
+
         return finalized;
     }
 
+    @SuppressWarnings("unused")  // Used by API clients
     public IngestionRunStatsDto ingestFromGreenhouse(String boardToken) {
         return ingestFromGreenhouse(boardToken, TRIGGER_MANUAL);
     }
@@ -85,6 +95,7 @@ public class JobIngestionFacade {
         return ingestNormalizedJobs(normalizedJobs, "GREENHOUSE", normalizedBoardToken, triggerType);
     }
 
+    @SuppressWarnings("unused")  // Used by API clients
     public IngestionRunStatsDto ingestFromLever(String companyToken) {
         return ingestFromLever(companyToken, TRIGGER_MANUAL);
     }
@@ -149,6 +160,7 @@ public class JobIngestionFacade {
         }
     }
 
+    @SuppressWarnings("unused")  // Used by scheduler and API
     public List<IngestionRunStatsDto> ingestAllConfiguredSources(List<IngestionProperties.Source> sources) {
         return ingestAllConfiguredSources(sources, TRIGGER_MANUAL);
     }
